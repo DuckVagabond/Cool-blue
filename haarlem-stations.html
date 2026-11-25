@@ -1,0 +1,125 @@
+<title>Stations rond Haarlem</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: schematic map on top, sorted station list below; red dots = NS stations within 20 km of Haarlem */
+:root{
+  --bg:#f3f5f4; --fg:#18211f; --muted:#5a6663; --panel:#ffffff; --line:#cfd8d5;
+  --sea:#d6e6ee; --land:#e9eee9; --ring:#2b6f6a; --dot:#d62828; --dot-edge:#ffffff; --home:#18211f;
+  --font-display:'Space Grotesk',system-ui,sans-serif; --font-body:'Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101615; --fg:#e6ece9; --muted:#9aa8a4; --panel:#18201e; --line:#2e3a37;
+  --sea:#16262d; --land:#1b2421; --ring:#4aa8a0; --dot:#ff4d4d; --dot-edge:#101615; --home:#e6ece9; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101615; --fg:#e6ece9; --muted:#9aa8a4; --panel:#18201e; --line:#2e3a37;
+  --sea:#16262d; --land:#1b2421; --ring:#4aa8a0; --dot:#ff4d4d; --dot-edge:#101615; --home:#e6ece9; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.5;
+  padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font-family:var(--font-display);font-size:clamp(1.5rem,4vw,2.1rem);line-height:1.15;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;max-width:65ch}
+.map{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+svg{display:block;width:100%;height:auto}
+.sea{fill:var(--sea)} .land{fill:var(--land)}
+.ring{fill:none;stroke:var(--ring);stroke-width:.12;stroke-dasharray:.5 .35}
+.ringlbl{fill:var(--ring);font:600 .85px var(--font-body)}
+.dot{fill:var(--dot);stroke:var(--dot-edge);stroke-width:.14}
+.home{fill:var(--home);stroke:var(--dot-edge);stroke-width:.14}
+.lbl{fill:var(--fg);font:500 .95px var(--font-body);paint-order:stroke;stroke:var(--panel);stroke-width:.28;stroke-linejoin:round}
+.lbl.h{font-weight:700}
+.sealbl{fill:var(--muted);font:italic .95px var(--font-body);letter-spacing:.08px}
+.scale line{stroke:var(--fg);stroke-width:.14} .scale text{fill:var(--fg);font:.85px var(--font-body)}
+.list{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.list h2{font-family:var(--font-display);font-size:1.05rem;margin:0 0 8px}
+ul{list-style:none;margin:0;padding:0;columns:2 260px;column-gap:28px}
+li{display:flex;gap:10px;align-items:baseline;break-inside:avoid;padding:3px 0;border-bottom:1px solid var(--line)}
+li i{width:9px;height:9px;border-radius:50%;background:var(--dot);flex:none;align-self:center}
+li span{flex:1;min-width:0} li b{font-variant-numeric:tabular-nums;font-weight:500;color:var(--muted)}
+.note{color:var(--muted);font-size:13px;max-width:75ch;margin:0}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Treinstations binnen 20 km van Haarlem</h1>
+    <p class="sub" id="sub"></p>
+  </header>
+  <div class="map"><svg id="svg" role="img" aria-label="Kaart met rode stippen op elk treinstation binnen 20 kilometer van Haarlem"></svg></div>
+  <section class="list"><h2>Stations op afstand</h2><ul id="list"></ul></section>
+  <p class="note">Schematische kaart: de kustlijn is geschetst, de stationslocaties zijn benaderd (ongeveer 0,3 km nauwkeurig) en afstanden gelden hemelsbreed vanaf station Haarlem. Controleer de actuele dienstregeling bij NS. Stations vlak bij de grens van 20 km (zoals Sassenheim) kunnen er door de afronding net in of uit vallen.</p>
+</div>
+
+<script>
+const C = {lat:52.3881, lon:4.6386};           // station Haarlem
+const R = 20;
+// dir: side of the label (r, l, t, b)
+const S = [
+ ["Haarlem",52.3881,4.6386,"l"],
+ ["Haarlem Spaarnwoude",52.3828,4.6711,"b"],
+ ["Heemstede-Aerdenhout",52.3589,4.6194,"l"],
+ ["Hillegom",52.2917,4.5800,"l"],
+ ["Sassenheim",52.2268,4.5228,"l"],
+ ["Bloemendaal",52.4056,4.6197,"l"],
+ ["Zandvoort aan Zee",52.3736,4.5379,"l"],
+ ["Santpoort Zuid",52.4286,4.6353,"l"],
+ ["Santpoort Noord",52.4419,4.6499,"r"],
+ ["Driehuis",52.4540,4.6370,"l"],
+ ["Beverwijk",52.4850,4.6570,"l"],
+ ["Heemskerk",52.5078,4.6667,"r"],
+ ["Castricum",52.5489,4.6598,"r"],
+ ["Uitgeest",52.5290,4.7095,"r"],
+ ["Krommenie-Assendelft",52.4980,4.7630,"r"],
+ ["Wormerveer",52.4920,4.7960,"r"],
+ ["Zaandijk Zaanse Schans",52.4730,4.8020,"r"],
+ ["Koog aan de Zaan",52.4590,4.8020,"r"],
+ ["Zaandam",52.4388,4.8128,"l"],
+ ["Halfweg-Zwanenburg",52.3826,4.7444,"t"],
+ ["Amsterdam Sloterdijk",52.3890,4.8376,"r"],
+ ["Amsterdam Centraal",52.3791,4.9003,"r"],
+ ["Amsterdam Lelylaan",52.3578,4.8337,"l"],
+ ["Amsterdam Zuid",52.3388,4.8728,"l"],
+ ["Amsterdam RAI",52.3391,4.8905,"r"],
+ ["Amsterdam Amstel",52.3466,4.9177,"r"],
+ ["Schiphol",52.3094,4.7612,"r"],
+ ["Hoofddorp",52.3080,4.6905,"l"],
+ ["Nieuw-Vennep",52.2646,4.6355,"r"],
+ ["Duivendrecht",52.3322,4.9366,"r"],
+ ["Amsterdam Muiderpoort",52.3606,4.9362,"r"],
+ ["Amsterdam Science Park",52.3562,4.9549,"r"],
+ ["Leiden Centraal",52.1665,4.4818,"r"]
+];
+const rad = d=>d*Math.PI/180;
+function dist(a,b,c,d){const x=rad(c-a),y=rad(d-b);
+  const h=Math.sin(x/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(y/2)**2;
+  return 12742*Math.asin(Math.sqrt(h));}
+const kx = lon => (lon-C.lon)*111.32*Math.cos(rad(C.lat));
+const ky = lat => -(lat-C.lat)*111.2;
+const st = S.map(([n,la,lo,d])=>({n,la,lo,d,km:dist(C.lat,C.lon,la,lo)}))
+            .filter(s=>s.km<=R).sort((a,b)=>a.km-b.km);
+
+const X0=-26,X1=31,Y0=-23,Y1=23;
+const coast=[[52.17,4.38],[52.24,4.43],[52.30,4.49],[52.37,4.52],[52.43,4.55],[52.465,4.56],[52.50,4.59],[52.55,4.62],[52.60,4.63],[52.66,4.64]];
+const sea = "M"+X0+","+Y0+" L"+(kx(4.64))+","+Y0+" L"+coast.slice().reverse().map(p=>kx(p[1])+","+ky(p[0])).join(" L")+" L"+X0+","+Y1+" Z";
+let h='';
+h+=`<rect x="${X0}" y="${Y0}" width="${X1-X0}" height="${Y1-Y0}" class="land"/>`;
+// sea polygon: from north-west corner along the coast to south-west corner
+const cp = coast.map(p=>[kx(p[1]),ky(p[0])]);
+const north=cp[cp.length-1], south=cp[0];
+h+=`<path class="sea" d="M${X0},${Y0} L${north[0]},${Y0} L${north[0]},${north[1]} `+cp.slice().reverse().map(p=>`L${p[0]},${p[1]}`).join(' ')+` L${south[0]},${Y1} L${X0},${Y1} Z"/>`;
+h+=`<text class="sealbl" x="${X0+2}" y="0">Noordzee</text>`;
+h+=`<circle class="ring" cx="0" cy="0" r="${R}"/>`;
+h+=`<text class="ringlbl" x="${R*0.707+.4}" y="${-R*0.707-.3}">20 km</text>`;
+h+=`<g class="scale"><line x1="${X0+2}" y1="${Y1-2}" x2="${X0+12}" y2="${Y1-2}"/><line x1="${X0+2}" y1="${Y1-2.5}" x2="${X0+2}" y2="${Y1-1.5}"/><line x1="${X0+12}" y1="${Y1-2.5}" x2="${X0+12}" y2="${Y1-1.5}"/><text x="${X0+2}" y="${Y1-3}">10 km</text></g>`;
+st.forEach(s=>{
+  const x=kx(s.lon),y=ky(s.la),home=s.n==="Haarlem";
+  const off=.75; let tx=x,ty=y+.3,a='start';
+  if(s.d==='r'){tx=x+off;} else if(s.d==='l'){tx=x-off;a='end';}
+  else if(s.d==='t'){ty=y-.8;a='middle';} else {ty=y+1.5;a='middle';}
+  h+=`<circle class="${home?'home':'dot'}" cx="${x}" cy="${y}" r="${home?.55:.5}"/>`;
+  h+=`<text class="lbl${home?' h':''}" x="${tx}" y="${ty}" text-anchor="${a}">${s.n}</text>`;
+});
+const svg=document.getElementById('svg');
+svg.setAttribute('viewBox',`${X0} ${Y0} ${X1-X0} ${Y1-Y0}`);
+svg.innerHTML=h;
+document.getElementById('sub').textContent=`${st.length} stations met een rode stip, hemelsbreed gemeten vanaf station Haarlem.`;
+document.getElementById('list').innerHTML=st.map(s=>`<li><i></i><span>${s.n}</span><b>${s.km.toFixed(1).replace('.',',')} km</b></li>`).join('');
+</script>
